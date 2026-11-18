@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex,nofollow">
+<script>
+/* google.script.run の代わりに、Apps Script のAPI(doPost)へ送る */
+(function(){
+  var API = 'https://script.google.com/macros/s/AKfycbwtD8fDf_ubFphN6kj64tBin1laTfNeqz1tM4ZT9UcjgBDPi-WET2E7BPWSvJ51fXIa/exec';
+  function mk(h){
+    return new Proxy({}, { get: function(_, p){
+      if(p === 'withSuccessHandler') return function(f){ return mk({s:f, f:h.f}); };
+      if(p === 'withFailureHandler') return function(f){ return mk({s:h.s, f:f}); };
+      return function(){
+        var args = Array.prototype.slice.call(arguments);
+        fetch(API, { method:'POST', body: JSON.stringify({fn:p, args:args}), headers:{'Content-Type':'text/plain;charset=utf-8'} })
+          .then(function(r){ return r.json(); })
+          .then(function(j){ if(j.ok){ h.s && h.s(j.result); } else { h.f && h.f(new Error(j.error)); } })
+          .catch(function(){ h.f && h.f(new Error('通信できませんでした。電波の良い場所でもう一度お試しください。')); });
+      };
+    }});
+  }
+  window.google = { script: { run: mk({}) } };
+})();
+</script>
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登園届 確認(職員用)|みのべ幼稚園</title>
+<style>
+  :root{
+    --yellow:#F6C431; --yellow-soft:#FFF6D6; --ink:#3A3226; --sub:#7A6F60;
+    --line:#E8DFC9; --bg:#FFFCF4; --ok:#2E8B57; --warn:#C0661A; --err:#C0392B;
+    --cho:#3FA36B; --chu:#F08A24; --sho:#3BA6D9; --ki:#E9B100;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;font-size:15px;line-height:1.6}
+  header{background:var(--yellow);padding:14px 16px;display:flex;align-items:center;gap:10px}
+  header h1{margin:0;font-size:18px;flex:1}
+  header button{border:none;background:rgba(255,255,255,.7);border-radius:8px;padding:7px 12px;font-size:14px;cursor:pointer;font-family:inherit}
+  main{max-width:820px;margin:0 auto;padding:14px 14px 60px}
+  .demo{background:#333;color:#fff;font-size:12.5px;text-align:center;padding:6px}
+  .hide{display:none!important}
+
+  /* ログイン */
+  .login{max-width:360px;margin:40px auto;background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px 20px;text-align:center}
+  .login .g{font-size:44px}
+  input[type=text],input[type=password],textarea{width:100%;font-size:16px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;font-family:inherit;color:var(--ink);background:#fff}
+  input:focus,textarea:focus{outline:none;border-color:var(--yellow);box-shadow:0 0 0 3px var(--yellow-soft)}
+  .btn{border:none;border-radius:10px;padding:11px 16px;font-size:15px;font-weight:bold;cursor:pointer;font-family:inherit;background:var(--ink);color:#fff}
+  .btn.sub{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+  .btn.ok{background:var(--ok)}
+  .btn:disabled{opacity:.45;cursor:default}
+  .err{color:var(--err);font-size:14px;margin-top:8px}
+
+  /* サマリー */
+  .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .summary button{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:10px 6px;text-align:center;cursor:pointer;font-family:inherit;color:var(--ink)}
+  .summary button.on{border-color:var(--ink);box-shadow:0 0 0 2px var(--ink) inset}
+  .summary .n{font-size:26px;font-weight:bold;line-height:1.2}
+  .summary .l{font-size:12.5px;color:var(--sub)}
+  .summary .alert .n{color:var(--err)}
+
+  .filters{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 6px;align-items:center}
+  .chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:5px 13px;font-size:14px;cursor:pointer;font-family:inherit;color:var(--ink)}
+  .chip.on{color:#fff;background:var(--ink);border-color:var(--ink)}
+  .chip[data-g="年長"].on{background:var(--cho);border-color:var(--cho)}
+  .chip[data-g="年中"].on{background:var(--chu);border-color:var(--chu)}
+  .chip[data-g="年少"].on{background:var(--sho);border-color:var(--sho)}
+  .chip[data-g="きりん"].on{background:var(--ki);border-color:var(--ki)}
+  .search{flex:1;min-width:160px}
+  .search input{padding:7px 12px;font-size:15px}
+  .count{font-size:13px;color:var(--sub);margin:4px 2px 8px}
+
+  /* カード */
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+  .card.done{opacity:.72}
+  .head{display:flex;gap:10px;align-items:center;padding:12px 14px;cursor:pointer}
+  .gbar{width:6px;align-self:stretch;border-radius:4px;flex:none}
+  .head .main{flex:1;min-width:0}
+  .name{font-weight:bold;font-size:16px}
+  .name small{font-weight:normal;color:var(--sub);font-size:13px;margin-left:6px}
+  .meta{font-size:13.5px;color:var(--sub);display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:2px}
+  .tag{display:inline-block;font-size:12px;border-radius:6px;padding:1px 7px;font-weight:bold}
+  .tag.doctor{background:#FFF1E4;color:#9A4E0D}
+  .tag.parent{background:#EAF6EE;color:#225E3D}
+  .tag.self{background:#EEF0FB;color:#3B4A9A}
+  .tag.warn{background:#FDECEA;color:var(--err)}
+  .tag.today{background:var(--err);color:#fff}
+  .tag.tomorrow{background:var(--warn);color:#fff}
+  .status{flex:none;text-align:right;font-size:12.5px}
+  .status .st{display:inline-block;border-radius:999px;padding:3px 10px;font-weight:bold}
+  .st.yet{background:var(--yellow);color:var(--ink)}
+  .st.ok{background:#EAF6EE;color:var(--ok)}
+  .body{border-top:1px dashed var(--line);padding:12px 14px 14px;display:none}
+  .card.open .body{display:block}
+  dl{display:grid;grid-template-columns:7.5em 1fr;gap:4px 10px;margin:0;font-size:14.5px}
+  dt{color:var(--sub)}
+  dd{margin:0;white-space:pre-wrap;word-break:break-all}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .memo{margin-top:12px}
+  .who{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .who input{width:9em;padding:9px 10px;font-size:15px}
+  .cardMsg{color:var(--err);font-size:13.5px;margin-top:6px}
+  .memo label{font-size:13px;color:var(--sub)}
+  .memo textarea{min-height:56px;font-size:15px}
+  .empty{text-align:center;color:var(--sub);padding:40px 0}
+
+  /* 写真 */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10;padding:14px}
+  .modal{justify-content:flex-start;overflow:auto}
+  .modal .imgbox{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;overflow:auto}
+  .modal img{max-width:100%;max-height:62vh;border-radius:6px;background:#fff;cursor:zoom-in}
+  .modal img.zoom{max-width:none;max-height:none;width:200%;cursor:zoom-out}
+  .check{background:#fff;border-radius:10px;padding:10px 14px;margin-top:10px;width:100%;max-width:640px;font-size:14px}
+  .check b{display:block;margin-bottom:4px}
+  .check dl{grid-template-columns:8.5em 1fr;font-size:14px}
+  .modal iframe{width:100%;height:82vh;border:none;background:#fff;border-radius:6px}
+  .modal .bar{display:flex;gap:8px;margin-top:10px}
+  .modal .msg{color:#fff}
+</style>
+<script>
+window.addEventListener('error', function(e){
+  var m = (e.message || String(e)) + ' (line ' + (e.lineno||'?') + ')';
+  try{ google.script.run.clientLog('ERR ' + m); }catch(_){}
+  var el = document.getElementById('loginErr'); if(el) el.textContent = '画面エラー:' + m;
+});
+try{ google.script.run.clientLog('loaded ' + navigator.userAgent); }catch(_){}
+</script>
+</head>
+<body>
+<div id="demoBar" class="demo hide">プレビュー表示です(見本データ)</div>
+<header>
+  <h1>🦒 登園届 確認</h1>
+  <button id="reloadBtn" class="hide" type="button">↻ 更新</button>
+</header>
+
+<main>
+  <div class="err" id="loginErr"></div>
+  <div id="app" class="hide">
+    <div class="summary">
+      <button type="button" data-view="yet" class="alert"><div class="n" id="nYet">0</div><div class="l">未確認</div></button>
+      <button type="button" data-view="today"><div class="n" id="nToday">0</div><div class="l">今日から登園</div></button>
+      <button type="button" data-view="tomorrow"><div class="n" id="nTomorrow">0</div><div class="l">明日から登園</div></button>
+      <button type="button" data-view="done"><div class="n" id="nDone">0</div><div class="l">確認済み</div></button>
+    </div>
+
+    <div class="filters" id="gradeChips">
+      <button type="button" class="chip on" data-g="">全学年</button>
+      <button type="button" class="chip" data-g="年長">年長</button>
+      <button type="button" class="chip" data-g="年中">年中</button>
+      <button type="button" class="chip" data-g="年少">年少</button>
+      <button type="button" class="chip" data-g="きりん">きりん</button>
+    </div>
+    <div class="filters">
+      <button type="button" class="chip" data-v="all" id="allBtn">すべて表示</button>
+      <div class="search"><input type="text" id="q" placeholder="名前・クラス・病名で検索"></div>
+    </div>
+    <div class="count" id="count"></div>
+    <div id="list"></div>
+  </div>
+</main>
+
+<div id="modal" class="modal hide">
+  <div class="imgbox"><div id="modalBody" class="msg">読み込み中…</div></div>
+  <div class="check" id="checkPanel"></div>
+  <div class="bar">
+    <button class="btn sub" id="prevImg" type="button">◀</button>
+    <button class="btn sub" id="closeModal" type="button">閉じる</button>
+    <button class="btn sub" id="nextImg" type="button">▶</button>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+window.addEventListener('error', e => { const el = document.getElementById('loginErr'); if(el) el.textContent = '画面エラー:' + (e.message || e); });
+const isGAS = typeof google !== 'undefined' && google.script && google.script.run;
+if(!isGAS) $('demoBar').classList.remove('hide');
+
+const GRADE_COLOR = {'年長':'var(--cho)','年中':'var(--chu)','年少':'var(--sho)','きりん':'var(--ki)'};
+const store = {
+  get(k){ try{ return sessionStorage.getItem(k); }catch(e){ return mem[k]; } },
+  set(k,v){ try{ sessionStorage.setItem(k,v); }catch(e){ mem[k]=v; } },
+  del(k){ try{ sessionStorage.removeItem(k); }catch(e){ delete mem[k]; } },
+  getL(k){ try{ return localStorage.getItem(k)||''; }catch(e){ return mem[k]||''; } },
+  setL(k,v){ try{ localStorage.setItem(k,v); }catch(e){ mem[k]=v; } },
+};
+const mem = {};
+let BOOT = null;
+try{ BOOT = JSON.parse(document.getElementById('boot').textContent); }catch(e){}
+let pass = BOOT ? BOOT.key : (new URLSearchParams(location.hash.slice(1)).get('key') || '');
+let rows = [], view = 'yet', grade = '', openId = null;
+
+/* サーバー呼び出し(プレビュー時は見本データ) */
+function call(fn, ...args){
+  return new Promise((res, rej) => {
+    if(isGAS){
+      const timer = setTimeout(() => rej(new Error('サーバーから応答がありません。電波の良い場所で「更新」を押してください。')), 20000);
+      try{ google.script.run.withSuccessHandler(r=>{clearTimeout(timer);res(r);}).withFailureHandler(e=>{clearTimeout(timer);rej(e);})[fn](pass, ...args); }
+      catch(e){ clearTimeout(timer); rej(e); }
+      return;
+    }
+    setTimeout(() => res(demo(fn, ...args)), 250);
+  });
+}
+
+function ymd(d){ return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+const today = ymd(new Date());
+const tomorrow = ymd(new Date(Date.now()+86400000));
+function jp(s){ if(!s) return ''; const [y,m,d]=s.split('-').map(Number); if(!d) return s; const w='日月火水木金土'[new Date(y,m-1,d).getDay()]; return `${m}/${d}(${w})`; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+$('reloadBtn').onclick = () => load();
+
+async function load(){
+  $('count').textContent='読み込み中…';
+  try{ rows = await call('staffList'); render(); }
+  catch(e){ $('count').textContent = (e && e.message) || '読み込めませんでした'; }
+}
+
+/* 表示 */
+document.querySelectorAll('.summary button').forEach(b => b.onclick = () => {
+  view = (view === b.dataset.view) ? 'all' : b.dataset.view; render();
+});
+$('allBtn').onclick = () => { view = 'all'; render(); };
+document.querySelectorAll('#gradeChips .chip').forEach(b => b.onclick = () => {
+  grade = b.dataset.g;
+  document.querySelectorAll('#gradeChips .chip').forEach(x => x.classList.toggle('on', x===b));
+  render();
+});
+$('q').addEventListener('input', render);
+
+function inGrade(r){ return !grade || r.grade === grade; }
+
+function render(){
+  const base = rows.filter(inGrade);
+  $('nYet').textContent = base.filter(r=>!r.confirmed).length;
+  $('nToday').textContent = base.filter(r=>r.returnDate===today).length;
+  $('nTomorrow').textContent = base.filter(r=>r.returnDate===tomorrow).length;
+  $('nDone').textContent = base.filter(r=>r.confirmed).length;
+  document.querySelectorAll('.summary button').forEach(b => b.classList.toggle('on', b.dataset.view===view));
+  $('allBtn').classList.toggle('on', view==='all');
+
+  const q = $('q').value.trim();
+  let list = base.filter(r =>
+    view==='all' ? true : view==='yet' ? !r.confirmed : view==='done' ? r.confirmed : view==='today' ? r.returnDate===today : r.returnDate===tomorrow);
+  if(q) list = list.filter(r => [r.childName,r.childKana,r.className,r.disease,r.parentName,r.receiptNo].join(' ').includes(q));
+  // 未確認を上に、その中は登園再開日が近い順
+  list.sort((a,b) => (a.confirmed-b.confirmed) || (a.returnDate||'9').localeCompare(b.returnDate||'9') || b.receivedAt.localeCompare(a.receivedAt));
+
+  const label = {yet:'未確認', today:'今日から登園', tomorrow:'明日から登園', done:'確認済み', all:'すべて'}[view];
+  $('count').textContent = `${grade||'全学年'}・${label}:${list.length}件`;
+  $('list').innerHTML = list.length ? list.map(card).join('') : '<div class="empty">該当する届はありません</div>';
+  list.forEach(r => bindCard(r));
+}
+
+function card(r){
+  const kind = r.docType.includes('写真あり') || r.docType==='登園許可証明書(医師記入)' ? 'doctor' : r.docType.includes('申告') ? 'self' : 'parent';
+  const kindLabel = {doctor:'医師証明書', self:'医師判断(申告)', parent:'保護者記入'}[kind];
+  const ret = r.returnDate===today ? '<span class="tag today">今日から</span>' : r.returnDate===tomorrow ? '<span class="tag tomorrow">明日から</span>' : '';
+  return `
+  <div class="card ${r.confirmed?'done':''} ${openId===r.receiptNo?'open':''}" id="c-${esc(r.receiptNo)}">
+    <div class="head">
+      <div class="gbar" style="background:${GRADE_COLOR[r.grade]||'#ccc'}"></div>
+      <div class="main">
+        <div class="name">${esc(r.childName)}<small>${esc(r.grade)} ${esc(r.className)}</small></div>
+        <div class="meta">
+          <span>${esc(r.disease)}</span>
+          <span>登園 ${jp(r.returnDate)} ${ret}</span>
+          <span class="tag ${kind}">${kindLabel}</span>
+          ${r.ruleNote?'<span class="tag warn">⚠ 目安より早い</span>':''}
+        </div>
+      </div>
+      <div class="status">
+        ${r.confirmed ? `<span class="st ok">✓ 確認済</span><div style="color:var(--sub);margin-top:2px">${esc(r.confirmedBy)}</div>` : '<span class="st yet">未確認</span>'}
+      </div>
+    </div>
+    <div class="body">
+      <dl>
+        <dt>受付</dt><dd>${esc(r.receiptNo)}(${esc(r.receivedAt)})</dd>
+        <dt>ふりがな</dt><dd>${esc(r.childKana)||'—'}</dd>
+        <dt>病名</dt><dd>${esc(r.disease)}</dd>
+        <dt>発症日</dt><dd>${jp(r.onsetDate)||'—'}</dd>
+        <dt>受診日</dt><dd>${jp(r.visitDate)||'—'}(${esc(r.clinic)||'—'})</dd>
+        ${r.recoverDate?`<dt>解熱・軽快日</dt><dd>${jp(r.recoverDate)}</dd>`:''}
+        ${r.doctorOkDate?`<dt>医師の登園可</dt><dd>${jp(r.doctorOkDate)}(保護者申告)</dd>`:''}
+        <dt>登園再開日</dt><dd>${jp(r.returnDate)}${r.ruleNote?`<br><span style="color:var(--err)">⚠ ${esc(r.ruleNote)}</span>`:''}</dd>
+        <dt>保護者</dt><dd>${esc(r.parentName)}${r.relation?`(${esc(r.relation)})`:''}</dd>
+        <dt>電話</dt><dd>${r.phone?`<a href="tel:${esc(r.phone)}">${esc(r.phone)}</a>`:'—'}</dd>
+        <dt>連絡事項</dt><dd>${esc(r.note)||'—'}</dd>
+        ${r.confirmed?`<dt>確認</dt><dd>${esc(r.confirmedBy)}(${esc(r.confirmedAt)})</dd>`:''}
+      </dl>
+      <div class="actions">
+        ${r.fileCount?`<button class="btn sub" data-act="photo" type="button">📄 証明書を見る(${r.fileCount}枚)</button>`:''}
+        ${r.confirmed
+          ? '<button class="btn sub" data-act="unconfirm" type="button">確認を取り消す</button>'
+          : `<span class="who"><input type="text" data-act="who" placeholder="確認者の名前" value="${esc(store.getL('touenStaffName'))}"><button class="btn ok" data-act="confirm" type="button">✓ 確認しました</button></span>`}
+      </div>
+      <div class="cardMsg" data-act="msg"></div>
+      <div class="memo">
+        <label>職員メモ(保護者には表示されません)</label>
+        <textarea data-act="memo" placeholder="例:原本受け取り済み/園長確認済み">${esc(r.staffMemo)}</textarea>
+      </div>
+    </div>
+  </div>`;
+}
+
+function bindCard(r){
+  const el = $('c-'+r.receiptNo); if(!el) return;
+  el.querySelector('.head').onclick = () => { openId = openId===r.receiptNo ? null : r.receiptNo; el.classList.toggle('open'); };
+  const q = s => el.querySelector(`[data-act="${s}"]`);
+  if(q('photo')) q('photo').onclick = () => showPhoto(r, 0);
+  const msg = t => { const m=q('msg'); if(m) m.textContent = t || ''; };
+  if(q('confirm')) q('confirm').onclick = async e => {
+    const name = (q('who').value || '').trim();
+    if(!name){ msg('確認者の名前を入力してください'); q('who').focus(); return; }
+    store.setL('touenStaffName', name);
+    e.target.disabled = true; e.target.textContent = '保存しています…'; msg('');
+    try{ await call('staffConfirm', r.receiptNo, name, true); r.confirmed=true; r.confirmedBy=name; r.confirmedAt=new Date().toLocaleString('ja-JP'); render(); }
+    catch(err){ msg((err && err.message) || '保存できませんでした'); e.target.disabled=false; e.target.textContent='✓ 確認しました'; }
+  };
+  if(q('unconfirm')) q('unconfirm').onclick = async e => {
+    if(e.target.dataset.armed !== '1'){ e.target.dataset.armed='1'; e.target.textContent='もう一度押すと取り消します'; return; }
+    e.target.disabled = true;
+    try{ await call('staffConfirm', r.receiptNo, '', false); r.confirmed=false; r.confirmedBy=''; render(); }
+    catch(err){ msg((err && err.message) || '保存できませんでした'); e.target.disabled=false; }
+  };
+  const memo = q('memo');
+  memo.onchange = async () => {
+    try{ await call('staffMemo', r.receiptNo, memo.value); r.staffMemo = memo.value; memo.style.borderColor='var(--ok)'; setTimeout(()=>memo.style.borderColor='',1200); }
+    catch(err){ msg((err && err.message) || '保存できませんでした'); }
+  };
+}
+
+/* 証明書の写真 */
+let photoRow=null, photoIdx=0;
+async function showPhoto(r, i){
+  photoRow=r; photoIdx=i;
+  $('modal').classList.remove('hide');
+  $('checkPanel').innerHTML = `<b>写真と照らし合わせて確認(${i+1}/${r.fileCount}枚目)</b><dl>
+    <dt>園児氏名</dt><dd>${esc(r.childName)}(${esc(r.grade)} ${esc(r.className)})</dd>
+    <dt>病名</dt><dd>${esc(r.disease)}</dd>
+    <dt>医療機関</dt><dd>${esc(r.clinic)||'—'}</dd>
+    <dt>登園再開日</dt><dd>${jp(r.returnDate)}</dd></dl>
+    <div style="color:var(--sub);font-size:12.5px;margin-top:4px">証明書の「登園可能と判断した日」が登園再開日より後になっていないか、医師名・医療機関名・日付の記入があるかを確認してください。写真をタップすると拡大します。</div>`;
+  $('modalBody').className='msg'; $('modalBody').textContent='読み込み中…';
+  $('prevImg').classList.toggle('hide', r.fileCount<2); $('nextImg').classList.toggle('hide', r.fileCount<2);
+  try{
+    const f = await call('staffFile', r.receiptNo, i);
+    const src = `data:${f.mimeType};base64,${f.base64}`;
+    $('modalBody').className='';
+    $('modalBody').innerHTML = f.mimeType==='application/pdf' ? `<iframe src="${src}"></iframe>` : `<img src="${src}" alt="登園許可証明書" onclick="this.classList.toggle('zoom')">`;
+  }catch(e){ $('modalBody').textContent = e.message || '表示できませんでした'; }
+}
+$('closeModal').onclick = () => { $('modal').classList.add('hide'); $('modalBody').innerHTML=''; };
+$('prevImg').onclick = () => showPhoto(photoRow, (photoIdx-1+photoRow.fileCount)%photoRow.fileCount);
+$('nextImg').onclick = () => showPhoto(photoRow, (photoIdx+1)%photoRow.fileCount);
+
+/* 見本データ(プレビュー用) */
+let DEMO = null;
+function demo(fn, ...a){
+  if(!DEMO){
+    const d = n => ymd(new Date(Date.now()+n*86400000));
+    DEMO = [
+      {receiptNo:'261110-003',receivedAt:d(0)+' 08:12',confirmed:false,confirmedBy:'',confirmedAt:'',docType:'登園許可証明書(医師記入・写真あり)',grade:'年中',className:'もも',childName:'見本 はると',childKana:'みほん はると',disease:'インフルエンザ',onsetDate:d(-6),visitDate:d(-5),clinic:'見本こどもクリニック',recoverDate:d(-4),returnDate:d(0),parentName:'見本 さくら',relation:'母',phone:'090-0000-0000',note:'まだ少し咳があります。',fileCount:1,ruleNote:'',staffMemo:''},
+      {receiptNo:'261110-002',receivedAt:d(0)+' 07:40',confirmed:false,confirmedBy:'',confirmedAt:'',docType:'登園届(保護者記入)',grade:'年長',className:'ふじ',childName:'見本 ゆい',childKana:'みほん ゆい',disease:'溶連菌感染症',onsetDate:d(-3),visitDate:d(-3),clinic:'見本小児科',recoverDate:'',returnDate:d(1),parentName:'見本 けんた',relation:'父',phone:'',note:'',fileCount:0,ruleNote:'',staffMemo:''},
+      {receiptNo:'261109-001',receivedAt:d(-1)+' 19:05',confirmed:false,confirmedBy:'',confirmedAt:'',docType:'登園許可証明書(医師記入・写真あり)',grade:'年少',className:'さくら',childName:'見本 そうた',childKana:'',disease:'新型コロナウイルス感染症',onsetDate:d(-4),visitDate:d(-4),clinic:'見本内科',recoverDate:d(-2),returnDate:d(1),parentName:'見本 みき',relation:'母',phone:'080-0000-0000',note:'',fileCount:2,ruleNote:'目安より早い',staffMemo:''},
+      {receiptNo:'261108-001',receivedAt:d(-2)+' 21:30',confirmed:true,confirmedBy:'佐藤',confirmedAt:d(-1)+' 08:30',docType:'登園届(保護者記入)',grade:'きりん',className:'きりん1',childName:'見本 りこ',childKana:'',disease:'手足口病',onsetDate:d(-5),visitDate:d(-5),clinic:'見本クリニック',recoverDate:'',returnDate:d(-1),parentName:'見本 あや',relation:'母',phone:'',note:'',fileCount:0,ruleNote:'',staffMemo:''},
+      {receiptNo:'261110-001',receivedAt:d(0)+' 06:55',confirmed:false,confirmedBy:'',confirmedAt:'',docType:'登園許可証明書(保護者申告・写真なし)',grade:'年長',className:'あやめ',childName:'見本 こはる',childKana:'',disease:'水痘(水ぼうそう)',onsetDate:d(-7),visitDate:d(-1),clinic:'見本皮膚科',recoverDate:'',returnDate:d(0),parentName:'見本 なお',relation:'母',phone:'',note:'',fileCount:0,ruleNote:'',staffMemo:'',doctorOkDate:d(0)},
+    ];
+  }
+  if(fn==='staffLogin') return true;
+  if(fn==='staffList') return JSON.parse(JSON.stringify(DEMO));
+  if(fn==='staffFile'){
+    const svg = `<svg xmlns="http:\/\/www.w3.org/2000/svg" width="600" height="800"><rect width="600" height="800" fill="#fff"/><text x="300" y="120" font-size="36" text-anchor="middle" font-family="sans-serif">登園許可証明書(見本 ${a[1]+1}枚目)</text><text x="300" y="400" font-size="22" text-anchor="middle" fill="#999" font-family="sans-serif">ここに保護者が撮影した写真が表示されます</text></svg>`;
+    return {mimeType:'image/svg+xml', base64: btoa(unescape(encodeURIComponent(svg)))};
+  }
+  return true;
+}
+
+function start(){
+  $('app').classList.remove('hide'); $('reloadBtn').classList.remove('hide');
+  const fb = $('fallback'); if(fb) fb.classList.add('hide');
+  if(BOOT && Array.isArray(BOOT.rows)){ rows = BOOT.rows; render(); } else { load(); }
+}
+start();
+</script>
+</body>
+</html>
